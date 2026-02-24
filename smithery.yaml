@@ -1,0 +1,26 @@
+name: cryptosignals402
+description: "Crypto intelligence API using x402 micropayments. Access funding rates, carry signals, and market opportunities for $0.01 USDC per call on Base mainnet."
+version: "1.0.0"
+homepage: "https://github.com/henkterharmsel/cryptosignals402"
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      baseUrl:
+        type: string
+        description: "API server URL (default: http://localhost:3871)"
+        default: "http://localhost:3871"
+      privateKey:
+        type: string
+        description: "Base mainnet wallet private key for x402 payments (needs USDC)"
+  commandFunction: |
+    (config) => ({
+      command: "python3",
+      args: ["mcp_server.py"],
+      env: {
+        CRYPTO402_BASE_URL: config.baseUrl || "http://localhost:3871",
+        CRYPTO402_PRIVATE_KEY: config.privateKey || ""
+      }
+    })
