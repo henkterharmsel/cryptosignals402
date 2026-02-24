@@ -17,7 +17,7 @@ from x402.http.clients.requests import x402_requests
 
 # ─── Config ────────────────────────────────────────────────────────────────────
 
-PRIVATE_KEY = "0xd7627b630cd8421d82c3d53b82b73d0820fb496c41f9f1ed20d4248b6b02e234"
+PRIVATE_KEY = os.environ.get("CRYPTO402_PRIVATE_KEY", "")  # NEVER hardcode keys!
 BASE_URL = "http://localhost:3871"
 NETWORK = "eip155:8453"  # Base mainnet
 
