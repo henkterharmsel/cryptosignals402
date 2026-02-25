@@ -739,16 +739,20 @@ def setup_x402():
     print(f"   Protected routes: {len(protected_routes)}")
 
 
+# ─── Initialization ────────────────────────────────────────────────────────────
+# Always initialize analytics and x402 middleware at import time
+# This ensures gunicorn workers also get the middleware applied
+
+print(f"\n⚡ CryptoSignals402 — x402 Crypto Intelligence API")
+print(f"   Port: {PORT}")
+print(f"   Mode: {NETWORK_MODE} ({'Base mainnet' if NETWORK_MODE == 'mainnet' else 'Base Sepolia testnet'})")
+print(f"   Funding DB: {FUNDING_DB} ({'exists' if FUNDING_DB.exists() else 'MISSING!'})")
+
+init_analytics()
+setup_x402()
+
 # ─── Main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print(f"\n⚡ CryptoSignals402 — x402 Crypto Intelligence API")
-    print(f"   Port: {PORT}")
-    print(f"   Mode: {NETWORK_MODE} ({'Base mainnet' if NETWORK_MODE == 'mainnet' else 'Base Sepolia testnet'})")
-    print(f"   Funding DB: {FUNDING_DB} ({'exists' if FUNDING_DB.exists() else 'MISSING!'})")
-    
-    init_analytics()
-    setup_x402()
-    
     print(f"\n🚀 Starting server on port {PORT}...\n")
     app.run(host="0.0.0.0", port=PORT, debug=False)
