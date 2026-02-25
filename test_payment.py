@@ -1,5 +1,5 @@
-import os
 #!/usr/bin/env python3
+import os
 """
 Test an actual x402 payment to CryptoSignals402.
 Uses our EVM wallet with Base Sepolia testnet USDC.

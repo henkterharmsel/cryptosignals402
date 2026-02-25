@@ -4,6 +4,7 @@ Test a REAL x402 payment to CryptoSignals402 on Base MAINNET.
 Uses real USDC — this is the first production x402 payment!
 """
 
+import os
 import sys
 import json
 import time

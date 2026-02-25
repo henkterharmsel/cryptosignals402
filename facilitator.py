@@ -3,8 +3,8 @@
 Self-Hosted x402 Facilitator — Base Mainnet
 Verifies and settles EIP-3009 USDC payments on Base (eip155:8453)
 
-Port: 3872
-URL: http://localhost:3872/facilitator
+Port: 3873
+URL: http://localhost:3873/facilitator
 
 Endpoints (called by x402 resource servers):
   GET  /facilitator/supported
@@ -36,7 +36,7 @@ from x402.schemas import (
 
 # ─── Config ────────────────────────────────────────────────────────────────────
 
-PORT = int(os.environ.get("FACILITATOR_PORT", 3872))
+PORT = int(os.environ.get("FACILITATOR_PORT", 3873))
 PRIVATE_KEY = os.environ.get("FACILITATOR_PRIVATE_KEY", "")
 BASE_MAINNET_RPC = os.environ.get("BASE_RPC", "https://mainnet.base.org")
 NETWORK = "eip155:8453"  # Base mainnet

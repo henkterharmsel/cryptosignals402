@@ -1,0 +1,23 @@
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Database files (local state)
+*.db
+analytics.db
+facilitator_analytics.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/

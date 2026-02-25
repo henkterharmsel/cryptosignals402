@@ -76,7 +76,7 @@ curl http://localhost:3871/api/v1/funding/extremes
 | Network | Base Mainnet (eip155:8453) |
 | Token | USDC (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`) |
 | Price | $0.01 per call (10000 USDC micro-units) |
-| Pay-to | `0x5ae698C451085C8A213c7E3140c29d4b3aB0Cdd5` |
+| Pay-to | `0x176Ae77D96D0A015F3Dc748a1CD94DE93A7605a3` |
 
 ## Architecture
 
@@ -189,4 +189,4 @@ MIT — fork freely, but pay your fair share. 🙏
 ## Contact
 
 - GitHub: [@henkterharmsel](https://github.com/henkterharmsel)
-- Payment address: `0x5ae698C451085C8A213c7E3140c29d4b3aB0Cdd5` (Base mainnet)
+- Payment address: `0x176Ae77D96D0A015F3Dc748a1CD94DE93A7605a3` (Base mainnet)

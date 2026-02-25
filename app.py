@@ -5,8 +5,12 @@ Powered by x402 protocol | USDC on Base
 
 Free tier:   /api/v1/status, /api/v1/funding/extremes (top 5)
 Paid tier:   Full funding rates, opportunities, carry signals, TAO, XRPL
-Price:       $0.01 USDC per call (Base mainnet)
-Receive to:  0x5ae698C451085C8A213c7E3140c29d4b3aB0Cdd5
+Price:       $0.01 USDC per call (Base mainnet or Base Sepolia testnet)
+Receive to:  0x176Ae77D96D0A015F3Dc748a1CD94DE93A7605a3
+
+Modes:
+  NETWORK=mainnet  → eip155:8453  + self-hosted facilitator (port 3873)
+  NETWORK=testnet  → eip155:84532 + public facilitator (x402.org)
 """
 
 import json
@@ -29,15 +33,26 @@ from x402.http.types import RouteConfig, PaymentOption
 # ─── Config ────────────────────────────────────────────────────────────────────
 
 PORT = int(os.environ.get("PORT", 3871))
-PAY_TO = os.environ.get("PAY_TO", "0x5ae698C451085C8A213c7E3140c29d4b3aB0Cdd5")
-NETWORK = "eip155:8453"  # Base mainnet — self-hosted facilitator on port 3872
-FACILITATOR_URL = os.environ.get("FACILITATOR_URL", "http://localhost:3872/facilitator")
+PAY_TO = os.environ.get("PAY_TO", "0x176Ae77D96D0A015F3Dc748a1CD94DE93A7605a3")
+
+# Dual-mode: testnet (public facilitator) or mainnet (self-hosted)
+NETWORK_MODE = os.environ.get("NETWORK_MODE", "testnet")  # "mainnet" or "testnet"
+
+if NETWORK_MODE == "mainnet":
+    NETWORK = "eip155:8453"   # Base mainnet
+    FACILITATOR_URL = os.environ.get("FACILITATOR_URL", "http://localhost:3873/facilitator")
+else:
+    NETWORK = "eip155:84532"  # Base Sepolia testnet
+    FACILITATOR_URL = os.environ.get("FACILITATOR_URL", "https://x402.org/facilitator")
 
 # Data sources
 FUNDING_DB = Path(__file__).parent.parent / "funding-rate-hunter" / "funding_rates.db"
 TAO_API = "http://localhost:3863"
 XRPL_API = "http://localhost:3864"
 FUNDING_API = "http://localhost:3868"
+
+# Analytics DB
+ANALYTICS_DB = Path(__file__).parent / "analytics.db"
 
 # ─── Flask App ─────────────────────────────────────────────────────────────────
 
@@ -216,6 +231,8 @@ def get_carry_signals():
 @app.route("/")
 def index():
     """API landing page with documentation."""
+    # Use the request host to generate correct URLs in documentation
+    host = request.url_root.rstrip("/")
     html = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -375,13 +392,12 @@ wallet = Account.from_key("YOUR_PRIVATE_KEY")
 session = create_x402_session(wallet)
 
 # Get carry signals - pays $0.01 USDC automatically on Base
-HOST = "http://your-server:3871"
-resp = session.get(f"{HOST}/api/v1/carry/signals")
+resp = session.get("{host}/api/v1/carry/signals")
 print(resp.json())</div>
     
     <p style="color: #8080a0; margin-bottom: 16px; margin-top: 16px;">Curl (free endpoints only):</p>
-    <div class="code-block">curl http://your-server:3871/api/v1/status
-curl http://your-server:3871/api/v1/funding/extremes</div>
+    <div class="code-block">curl {host}/api/v1/status
+curl {host}/api/v1/funding/extremes</div>
   </div>
 
   <div class="section">
@@ -391,7 +407,7 @@ curl http://your-server:3871/api/v1/funding/extremes</div>
         <div>🔵 <strong>Network:</strong> Base (Ethereum L2) — chain ID 8453</div>
         <div>💵 <strong>Token:</strong> USDC (native Base USDC)</div>
         <div>💲 <strong>Price:</strong> $0.01 per API call</div>
-        <div>📬 <strong>Receive address:</strong> <code style="color: #64ffda;">0x5ae698C451085C8A213c7E3140c29d4b3aB0Cdd5</code></div>
+        <div>📬 <strong>Receive address:</strong> <code style="color: #64ffda;">0x176Ae77D96D0A015F3Dc748a1CD94DE93A7605a3</code></div>
         <div>🤖 <strong>Protocol:</strong> x402 (Coinbase standard) — payments fully automated</div>
       </div>
     </div>
@@ -402,7 +418,7 @@ curl http://your-server:3871/api/v1/funding/extremes</div>
 </footer>
 </body>
 </html>"""
-    return html
+    return html.replace("{host}", host)
 
 
 @app.route("/api/v1/status")
@@ -412,10 +428,12 @@ def status():
     return jsonify({
         "status": "ok",
         "service": "CryptoSignals402",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "protocol": "x402",
         "network": NETWORK,
+        "mode": NETWORK_MODE,
         "pay_to": PAY_TO,
+        "base_url": request.url_root.rstrip("/"),
         "data": {
             "snapshots": stats.get("snapshots", 0),
             "coins": stats.get("coins", 0),
@@ -604,6 +622,67 @@ def xrpl_pools():
     return jsonify({"error": "XRPL AMM service unavailable", "timestamp": datetime.now(timezone.utc).isoformat()}), 503
 
 
+# ─── Analytics Middleware ───────────────────────────────────────────────────────
+# NOTE: Must be defined BEFORE app.run() — code after app.run() never executes
+
+def init_analytics():
+    """Initialize analytics database."""
+    conn = sqlite3.connect(str(ANALYTICS_DB))
+    conn.execute("""CREATE TABLE IF NOT EXISTS api_calls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        endpoint TEXT NOT NULL,
+        paid INTEGER NOT NULL DEFAULT 0,
+        ip TEXT,
+        user_agent TEXT
+    )""")
+    conn.commit()
+    conn.close()
+
+
+def log_call(endpoint, paid=False):
+    """Log an API call."""
+    try:
+        conn = sqlite3.connect(str(ANALYTICS_DB))
+        conn.execute("INSERT INTO api_calls (timestamp, endpoint, paid, ip) VALUES (?,?,?,?)",
+                     (int(time.time()), endpoint, 1 if paid else 0, request.remote_addr))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+@app.after_request
+def track_request(response):
+    """Track all requests for analytics."""
+    paid = response.status_code == 200 and request.path.startswith("/api/v1/") and request.path not in ["/api/v1/status", "/api/v1/funding/extremes"]
+    log_call(request.path, paid)
+    return response
+
+
+@app.route("/api/v1/analytics")
+def analytics():
+    """Internal: API usage analytics (no payment required)."""
+    since = int(time.time()) - 86400  # last 24h
+    conn = sqlite3.connect(str(ANALYTICS_DB))
+    rows = conn.execute("""
+        SELECT endpoint, COUNT(*) as calls, SUM(paid) as paid_calls
+        FROM api_calls WHERE timestamp > ?
+        GROUP BY endpoint ORDER BY calls DESC
+    """, (since,)).fetchall()
+    total = conn.execute("SELECT COUNT(*), SUM(paid) FROM api_calls WHERE timestamp > ?", (since,)).fetchone()
+    conn.close()
+    return jsonify({
+        "last_24h": {
+            "total_calls": total[0] or 0,
+            "paid_calls": total[1] or 0,
+            "revenue_usdc": (total[1] or 0) * 0.01,
+        },
+        "by_endpoint": [{"endpoint": r[0], "calls": r[1], "paid": r[2]} for r in rows],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+
+
 # ─── x402 Payment Middleware Setup ─────────────────────────────────────────────
 
 def setup_x402():
@@ -652,7 +731,9 @@ def setup_x402():
     
     payment_middleware(app, protected_routes, server)
     print(f"✅ x402 payment middleware configured")
+    print(f"   Mode: {NETWORK_MODE}")
     print(f"   Network: {NETWORK}")
+    print(f"   Facilitator: {FACILITATOR_URL}")
     print(f"   Pay-to: {PAY_TO}")
     print(f"   Price: $0.01 USDC per call")
     print(f"   Protected routes: {len(protected_routes)}")
@@ -663,74 +744,11 @@ def setup_x402():
 if __name__ == "__main__":
     print(f"\n⚡ CryptoSignals402 — x402 Crypto Intelligence API")
     print(f"   Port: {PORT}")
+    print(f"   Mode: {NETWORK_MODE} ({'Base mainnet' if NETWORK_MODE == 'mainnet' else 'Base Sepolia testnet'})")
     print(f"   Funding DB: {FUNDING_DB} ({'exists' if FUNDING_DB.exists() else 'MISSING!'})")
     
+    init_analytics()
     setup_x402()
     
     print(f"\n🚀 Starting server on port {PORT}...\n")
     app.run(host="0.0.0.0", port=PORT, debug=False)
-
-
-# ─── Analytics Middleware ───────────────────────────────────────────────────────
-
-import sqlite3
-import os
-
-ANALYTICS_DB = Path(__file__).parent / "analytics.db"
-
-def init_analytics():
-    """Initialize analytics database."""
-    conn = sqlite3.connect(str(ANALYTICS_DB))
-    conn.execute("""CREATE TABLE IF NOT EXISTS api_calls (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp INTEGER NOT NULL,
-        endpoint TEXT NOT NULL,
-        paid INTEGER NOT NULL DEFAULT 0,
-        ip TEXT,
-        user_agent TEXT
-    )""")
-    conn.commit()
-    conn.close()
-
-def log_call(endpoint, paid=False):
-    """Log an API call."""
-    try:
-        conn = sqlite3.connect(str(ANALYTICS_DB))
-        conn.execute("INSERT INTO api_calls (timestamp, endpoint, paid, ip) VALUES (?,?,?,?)",
-                     (int(time.time()), endpoint, 1 if paid else 0, request.remote_addr))
-        conn.commit()
-        conn.close()
-    except Exception:
-        pass
-
-@app.after_request
-def track_request(response):
-    """Track all requests for analytics."""
-    paid = response.status_code == 200 and request.path.startswith("/api/v1/") and request.path not in ["/api/v1/status", "/api/v1/funding/extremes"]
-    log_call(request.path, paid)
-    return response
-
-@app.route("/api/v1/analytics")
-def analytics():
-    """Internal: API usage analytics (no payment required)."""
-    since = int(time.time()) - 86400  # last 24h
-    conn = sqlite3.connect(str(ANALYTICS_DB))
-    rows = conn.execute("""
-        SELECT endpoint, COUNT(*) as calls, SUM(paid) as paid_calls
-        FROM api_calls WHERE timestamp > ?
-        GROUP BY endpoint ORDER BY calls DESC
-    """, (since,)).fetchall()
-    total = conn.execute("SELECT COUNT(*), SUM(paid) FROM api_calls WHERE timestamp > ?", (since,)).fetchone()
-    conn.close()
-    return jsonify({
-        "last_24h": {
-            "total_calls": total[0] or 0,
-            "paid_calls": total[1] or 0,
-            "revenue_usdc": (total[1] or 0) * 0.01,
-        },
-        "by_endpoint": [{"endpoint": r[0], "calls": r[1], "paid": r[2]} for r in rows],
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    })
-
-# Initialize analytics DB on startup
-init_analytics()

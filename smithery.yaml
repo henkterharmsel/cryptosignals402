@@ -1,6 +1,6 @@
 name: cryptosignals402
-description: "Crypto intelligence API using x402 micropayments. Access funding rates, carry signals, and market opportunities for $0.01 USDC per call on Base mainnet."
-version: "1.0.0"
+description: "Real-time crypto intelligence API with x402 micropayments. Access funding rates (229 coins × 3 exchanges), carry trade signals, cross-exchange divergences, Bittensor subnet yields, and XRPL AMM pool data for $0.01 USDC per call on Base."
+version: "1.1.0"
 homepage: "https://github.com/henkterharmsel/cryptosignals402"
 
 startCommand:
@@ -10,11 +10,11 @@ startCommand:
     properties:
       baseUrl:
         type: string
-        description: "API server URL (default: http://localhost:3871)"
+        description: "CryptoSignals402 API server URL"
         default: "http://localhost:3871"
       privateKey:
         type: string
-        description: "Base mainnet wallet private key for x402 payments (needs USDC)"
+        description: "EVM wallet private key for x402 payments (needs USDC on Base Sepolia). Optional — free endpoints work without it."
   commandFunction: |
     (config) => ({
       command: "python3",
